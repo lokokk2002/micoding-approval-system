@@ -325,12 +325,21 @@ function UserSelector({
 // ============================================================
 // Routing Management — 審批層級（只管審批人）
 // ============================================================
+const CATEGORY_LABELS: Record<string, string> = {
+  all: '全部類別',
+  finance: '財務費用',
+  procurement: '採購',
+  hr: '人事',
+  operations: '門市營運',
+  marketing: '行銷',
+}
+
 function RoutingManagement() {
   const [routes, setRoutes] = useState<Routing[]>([])
   const [users, setUsers] = useState<User[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
-  const [editingRoute, setEditingRoute] = useState<Routing | null>(null)
+  const [editingGroup, setEditingGroup] = useState<{ brand: string; location: string; category: string; routes: Routing[] } | null>(null)
 
   const fetchData = useCallback(async () => {
     try {
@@ -344,14 +353,15 @@ function RoutingManagement() {
 
   useEffect(() => { fetchData() }, [fetchData])
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('確定要刪除此審批層級嗎？')) return
-    await fetch(`/api/routing/${id}`, { method: 'DELETE' })
+  const handleDeleteGroup = async (brand: string, location: string, category: string, routeGroup: Routing[]) => {
+    if (!confirm(`確定要刪除「${getBrandLabel(brand)} / ${getLocationLabel(location)}」的所有審批層級嗎？`)) return
+    await Promise.all(routeGroup.map((r) => fetch(`/api/routing/${r.id}`, { method: 'DELETE' })))
     fetchData()
   }
 
+  // 按 brand|location|category 分組
   const grouped = routes.reduce<Record<string, Routing[]>>((acc, route) => {
-    const key = `${route.brand}|${route.location}`
+    const key = `${route.brand}|${route.location}|${route.category}`
     if (!acc[key]) acc[key] = []
     acc[key].push(route)
     return acc
@@ -362,13 +372,13 @@ function RoutingManagement() {
       <div className="flex justify-between items-center mb-4">
         <div>
           <p className="text-sm text-gray-500">設定各品牌/門市的審批層級與審批人</p>
-          <p className="text-xs text-gray-400 mt-1">每一層只需指定審批人，追蹤人與結案人在「追蹤與結案」分頁設定</p>
+          <p className="text-xs text-gray-400 mt-1">可一次設定 1~3 層審批流程，追蹤人與結案人在「追蹤與結案」分頁設定</p>
         </div>
         <button
-          onClick={() => { setEditingRoute(null); setShowForm(true) }}
+          onClick={() => { setEditingGroup(null); setShowForm(true) }}
           className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
         >
-          + 新增審批層級
+          + 新增審批流程
         </button>
       </div>
 
@@ -377,38 +387,69 @@ function RoutingManagement() {
       ) : Object.keys(grouped).length === 0 ? (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
           <p className="text-gray-500 mb-2">尚未設定審批層級</p>
+          <p className="text-xs text-gray-400">點擊「新增審批流程」來設定品牌/門市的多層審批</p>
         </div>
       ) : (
         <div className="space-y-4">
           {Object.entries(grouped).map(([key, routeGroup]) => {
-            const [brand, location] = key.split('|')
+            const [brand, location, category] = key.split('|')
+            const sortedRoutes = routeGroup.sort((a, b) => a.level - b.level)
+            const totalLevels = Math.max(...sortedRoutes.map((r) => r.level))
             return (
               <div key={key} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
-                  <span className="font-medium text-gray-900">{getBrandLabel(brand)}</span>
-                  <span className="text-gray-400 mx-2">/</span>
-                  <span className="text-gray-600">{getLocationLabel(location)}</span>
+                <div className="bg-gray-50 px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-gray-900">{getBrandLabel(brand)}</span>
+                    <span className="text-gray-400">/</span>
+                    <span className="text-gray-600">{getLocationLabel(location)}</span>
+                    {category !== 'all' && (
+                      <span className="text-xs text-gray-400 bg-gray-200 px-2 py-0.5 rounded">{CATEGORY_LABELS[category] || category}</span>
+                    )}
+                    <span className="ml-2 px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700">
+                      {totalLevels} 層審批
+                    </span>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => { setEditingGroup({ brand, location, category, routes: sortedRoutes }); setShowForm(true) }}
+                      className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+                    >
+                      編輯
+                    </button>
+                    <button
+                      onClick={() => handleDeleteGroup(brand, location, category, routeGroup)}
+                      className="text-sm text-red-600 hover:text-red-800 font-medium"
+                    >
+                      刪除
+                    </button>
+                  </div>
                 </div>
-                <div className="divide-y divide-gray-100">
-                  {routeGroup.sort((a, b) => a.level - b.level).map((route) => (
-                    <div key={route.id} className="px-4 py-3 flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <span className="px-2 py-1 rounded text-xs font-bold bg-blue-100 text-blue-800">
-                          第 {route.level} 層
-                        </span>
-                        {route.category !== 'all' && (
-                          <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded">{route.category}</span>
-                        )}
-                        {route.reviewer_name && (
-                          <span className="text-sm text-gray-700">審批人：<strong>{route.reviewer_name}</strong></span>
+                <div className="px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    {sortedRoutes.map((route, idx) => (
+                      <div key={route.id} className="flex items-center gap-2">
+                        <div className="flex flex-col items-center">
+                          <span className={`inline-flex items-center justify-center w-8 h-8 rounded-full text-sm font-bold ${
+                            route.level === 1 ? 'bg-blue-100 text-blue-700' :
+                            route.level === 2 ? 'bg-purple-100 text-purple-700' :
+                            'bg-orange-100 text-orange-700'
+                          }`}>
+                            {route.level}
+                          </span>
+                          <span className="text-[10px] text-gray-400 mt-0.5">第{route.level}層</span>
+                        </div>
+                        <div className="bg-gray-50 rounded-lg px-3 py-2 min-w-[120px]">
+                          <p className="text-xs text-gray-400">審批人</p>
+                          <p className="text-sm font-medium text-gray-900">{route.reviewer_name || '未指定'}</p>
+                        </div>
+                        {idx < sortedRoutes.length - 1 && (
+                          <svg className="w-5 h-5 text-gray-300 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                          </svg>
                         )}
                       </div>
-                      <div className="flex gap-2">
-                        <button onClick={() => { setEditingRoute(route); setShowForm(true) }} className="text-sm text-blue-600 hover:text-blue-800 font-medium">編輯</button>
-                        <button onClick={() => handleDelete(route.id)} className="text-sm text-red-600 hover:text-red-800 font-medium">刪除</button>
-                      </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
               </div>
             )
@@ -418,7 +459,7 @@ function RoutingManagement() {
 
       {showForm && (
         <RoutingFormModal
-          route={editingRoute}
+          editingGroup={editingGroup}
           users={users}
           onClose={() => setShowForm(false)}
           onSaved={() => { setShowForm(false); fetchData() }}
@@ -428,72 +469,163 @@ function RoutingManagement() {
   )
 }
 
-function RoutingFormModal({ route, users, onClose, onSaved }: { route: Routing | null; users: User[]; onClose: () => void; onSaved: () => void }) {
-  const [form, setForm] = useState({
-    brand: route?.brand || '',
-    location: route?.location || '',
-    category: route?.category || 'all',
-    level: route?.level ?? 1,
-    reviewer_name: route?.reviewer_name || '',
-    reviewer_phone: route?.reviewer_phone || '',
-    reviewer_slack_id: route?.reviewer_slack_id || '',
-  })
+interface LevelConfig {
+  level: number
+  reviewer_name: string
+  reviewer_phone: string
+  reviewer_slack_id: string
+}
+
+function RoutingFormModal({
+  editingGroup,
+  users,
+  onClose,
+  onSaved,
+}: {
+  editingGroup: { brand: string; location: string; category: string; routes: Routing[] } | null
+  users: User[]
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const isEditing = !!editingGroup
+
+  const buildInitialLevels = (): LevelConfig[] => {
+    if (editingGroup && editingGroup.routes.length > 0) {
+      const maxLevel = Math.max(...editingGroup.routes.map((r) => r.level))
+      const levels: LevelConfig[] = []
+      for (let i = 1; i <= maxLevel; i++) {
+        const existing = editingGroup.routes.find((r) => r.level === i)
+        levels.push({
+          level: i,
+          reviewer_name: existing?.reviewer_name || '',
+          reviewer_phone: existing?.reviewer_phone || '',
+          reviewer_slack_id: existing?.reviewer_slack_id || '',
+        })
+      }
+      return levels
+    }
+    return [{ level: 1, reviewer_name: '', reviewer_phone: '', reviewer_slack_id: '' }]
+  }
+
+  const [brand, setBrand] = useState(editingGroup?.brand || '')
+  const [location, setLocation] = useState(editingGroup?.location || '')
+  const [category, setCategory] = useState(editingGroup?.category || 'all')
+  const [totalLevels, setTotalLevels] = useState(editingGroup ? Math.max(...editingGroup.routes.map((r) => r.level)) : 1)
+  const [levels, setLevels] = useState<LevelConfig[]>(buildInitialLevels)
   const [error, setError] = useState('')
   const [isSaving, setIsSaving] = useState(false)
 
-  const allLocations = form.brand
-    ? [...LOCATIONS[form.brand as keyof typeof LOCATIONS] || [], ...HQ_DEPARTMENTS.map((d) => ({ value: d.value, label: `總部 - ${d.label}` }))]
+  const allLocations = brand
+    ? [...LOCATIONS[brand as keyof typeof LOCATIONS] || [], ...HQ_DEPARTMENTS.map((d) => ({ value: d.value, label: `總部 - ${d.label}` }))]
     : []
+
+  const handleTotalLevelsChange = (newTotal: number) => {
+    setTotalLevels(newTotal)
+    setLevels((prev) => {
+      const updated: LevelConfig[] = []
+      for (let i = 1; i <= newTotal; i++) {
+        const existing = prev.find((l) => l.level === i)
+        updated.push(existing || { level: i, reviewer_name: '', reviewer_phone: '', reviewer_slack_id: '' })
+      }
+      return updated
+    })
+  }
+
+  const handleLevelUserChange = (levelNum: number, name: string, phone: string, slackId: string) => {
+    setLevels((prev) =>
+      prev.map((l) =>
+        l.level === levelNum
+          ? { ...l, reviewer_name: name, reviewer_phone: phone, reviewer_slack_id: slackId }
+          : l
+      )
+    )
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsSaving(true)
     setError('')
+
+    // 驗證每層都有審批人
+    const missingLevels = levels.filter((l) => !l.reviewer_name)
+    if (missingLevels.length > 0) {
+      setError(`第 ${missingLevels.map((l) => l.level).join('、')} 層尚未指定審批人`)
+      setIsSaving(false)
+      return
+    }
+
     try {
-      const url = route ? `/api/routing/${route.id}` : '/api/routing'
-      const method = route ? 'PUT' : 'POST'
-      const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) })
+      const res = await fetch('/api/routing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          brand,
+          location,
+          category,
+          totalLevels,
+          levels,
+        }),
+      })
       const data = await res.json()
       if (!res.ok) { setError(data.error || '儲存失敗'); return }
       onSaved()
     } catch { setError('儲存失敗') } finally { setIsSaving(false) }
   }
 
+  const LEVEL_COLORS = [
+    { bg: 'bg-blue-50', badge: 'bg-blue-100 text-blue-700', border: 'border-blue-200' },
+    { bg: 'bg-purple-50', badge: 'bg-purple-100 text-purple-700', border: 'border-purple-200' },
+    { bg: 'bg-orange-50', badge: 'bg-orange-100 text-orange-700', border: 'border-orange-200' },
+  ]
+
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
-      <div className="bg-white rounded-xl max-w-lg w-full shadow-2xl" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-white rounded-xl max-w-lg w-full shadow-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <div className="border-b border-gray-200 px-6 py-4">
-          <h2 className="text-lg font-bold text-gray-900">{route ? '編輯審批層級' : '新增審批層級'}</h2>
+          <h2 className="text-lg font-bold text-gray-900">{isEditing ? '編輯審批流程' : '新增審批流程'}</h2>
+          <p className="text-xs text-gray-400 mt-1">設定品牌/門市的多層審批流程，每一層指定一位審批人</p>
         </div>
         <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
+          {/* 品牌 & 門市 */}
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">品牌 *</label>
-              <select value={form.brand} onChange={(e) => setForm({ ...form, brand: e.target.value, location: '' })} required className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+              <select
+                value={brand}
+                onChange={(e) => { setBrand(e.target.value); setLocation('') }}
+                required
+                disabled={isEditing}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-100"
+              >
                 <option value="">請選擇</option>
                 {BRANDS.map((b) => (<option key={b.value} value={b.value}>{b.label}</option>))}
               </select>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">門市/部門 *</label>
-              <select value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} required disabled={!form.brand} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-100">
+              <select
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                required
+                disabled={!brand || isEditing}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-100"
+              >
                 <option value="">請選擇</option>
                 {allLocations.map((loc) => (<option key={loc.value} value={loc.value}>{loc.label}</option>))}
               </select>
             </div>
           </div>
+
+          {/* 適用類別 & 審批層數 */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">審批層級 *</label>
-              <select value={form.level} onChange={(e) => setForm({ ...form, level: Number(e.target.value) })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
-                <option value={1}>第 1 層</option>
-                <option value={2}>第 2 層</option>
-                <option value={3}>第 3 層</option>
-              </select>
-            </div>
-            <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">適用類別</label>
-              <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+              <select
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                disabled={isEditing}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-100"
+              >
                 <option value="all">全部類別</option>
                 <option value="finance">財務費用</option>
                 <option value="procurement">採購</option>
@@ -502,14 +634,79 @@ function RoutingFormModal({ route, users, onClose, onSaved }: { route: Routing |
                 <option value="marketing">行銷</option>
               </select>
             </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">審批層數 *</label>
+              <div className="flex gap-2">
+                {[1, 2, 3].map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => handleTotalLevelsChange(n)}
+                    className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                      totalLevels === n
+                        ? 'bg-blue-600 text-white border-blue-600'
+                        : 'bg-white text-gray-700 border-gray-300 hover:border-blue-400'
+                    }`}
+                  >
+                    {n} 層
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
-          <UserSelector
-            label="審批人"
-            selectedName={form.reviewer_name}
-            users={users}
-            colorClass="bg-blue-50"
-            onChange={(name, phone, slackId) => setForm({ ...form, reviewer_name: name, reviewer_phone: phone, reviewer_slack_id: slackId })}
-          />
+
+          {/* 審批流程視覺化 */}
+          <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+            <p className="text-sm font-medium text-gray-700 mb-3">審批流程</p>
+            <div className="space-y-3">
+              {levels.map((levelConfig, idx) => {
+                const colors = LEVEL_COLORS[idx] || LEVEL_COLORS[0]
+                return (
+                  <div key={levelConfig.level}>
+                    {/* 箭頭連接線 */}
+                    {idx > 0 && (
+                      <div className="flex justify-center -mt-1 -mb-1">
+                        <svg className="w-5 h-5 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                        </svg>
+                      </div>
+                    )}
+                    <div className={`rounded-lg border ${colors.border} overflow-hidden`}>
+                      <div className={`px-3 py-2 ${colors.bg} flex items-center gap-2`}>
+                        <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold ${colors.badge}`}>
+                          {levelConfig.level}
+                        </span>
+                        <span className="text-sm font-medium text-gray-700">第 {levelConfig.level} 層審批</span>
+                      </div>
+                      <div className="px-3 py-2 bg-white">
+                        <UserSelector
+                          label=""
+                          selectedName={levelConfig.reviewer_name}
+                          users={users}
+                          colorClass=""
+                          onChange={(name, phone, slackId) => handleLevelUserChange(levelConfig.level, name, phone, slackId)}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+            {/* 流程摘要 */}
+            <div className="mt-3 pt-3 border-t border-gray-200">
+              <p className="text-xs text-gray-400">
+                流程：申請人提交
+                {levels.map((l, i) => (
+                  <span key={l.level}>
+                    {' '}→ {l.reviewer_name ? <strong className="text-gray-600">{l.reviewer_name}</strong> : <span className="text-red-400">待指定</span>}
+                    <span className="text-gray-300">（第{l.level}層）</span>
+                  </span>
+                ))}
+                {' '}→ 核准
+              </p>
+            </div>
+          </div>
+
           {error && <div className="text-red-600 text-sm bg-red-50 p-3 rounded-lg">{error}</div>}
           <div className="flex justify-end gap-3 pt-2">
             <button type="button" onClick={onClose} className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50">取消</button>
