@@ -85,5 +85,20 @@ export interface PostApproval {
   closer_slack_id: string | null
 }
 
+// 登入請求型別
+export interface LoginRequest {
+  phone: string
+  password: string
+}
+
+// 註冊請求型別
+export interface RegisterRequest {
+  name: string
+  phone: string
+  password: string
+  email?: string
+  slack_id?: string
+}
+
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
 export interface Database {}

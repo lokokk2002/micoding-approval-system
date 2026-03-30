@@ -5,7 +5,7 @@ import type { User } from '@/types/database'
 
 interface AuthContextType {
   user: User | null
-  login: (phone: string) => Promise<{ success: boolean; error?: string }>
+  login: (phone: string, password: string) => Promise<{ success: boolean; error?: string }>
   logout: () => void
   isLoading: boolean
 }
@@ -16,20 +16,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(false)
 
-  const login = useCallback(async (phone: string): Promise<{ success: boolean; error?: string }> => {
+  const login = useCallback(async (phone: string, password: string): Promise<{ success: boolean; error?: string }> => {
     setIsLoading(true)
     try {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone }),
+        body: JSON.stringify({ phone, password }),
       })
       const data = await res.json()
       if (data.user) {
         setUser(data.user)
         return { success: true }
       }
-      return { success: false, error: data.error || '找不到此手機號碼的用戶' }
+      return { success: false, error: data.error || '登入失敗' }
     } catch {
       return { success: false, error: '登入失敗，請稍後再試' }
     } finally {

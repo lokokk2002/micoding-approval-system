@@ -189,6 +189,7 @@ function UserFormModal({
     brand: user?.brand || '',
     location: user?.location || '',
     slack_id: user?.slack_id || '',
+    password: '',
   })
   const [error, setError] = useState('')
   const [isSaving, setIsSaving] = useState(false)
@@ -204,10 +205,34 @@ function UserFormModal({
     e.preventDefault()
     setIsSaving(true)
     setError('')
+
+    // 新增使用者時密碼必填
+    if (!user && (!form.password || form.password.length < 4)) {
+      setError('新增使用者時密碼為必填，至少 4 個字元')
+      setIsSaving(false)
+      return
+    }
+    // 編輯時密碼有填就驗證長度
+    if (user && form.password && form.password.length < 4) {
+      setError('密碼至少 4 個字元')
+      setIsSaving(false)
+      return
+    }
+
     try {
       const url = user ? `/api/users/${user.id}` : '/api/users'
       const method = user ? 'PUT' : 'POST'
-      const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) })
+      // 編輯時，密碼為空就不送（不修改密碼）
+      const submitData = { ...form }
+      if (user && !submitData.password) {
+        const { password: _pw, ...rest } = submitData
+        const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(rest) })
+        const data = await res.json()
+        if (!res.ok) { setError(data.error || '儲存失敗'); return }
+        onSaved()
+        return
+      }
+      const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(submitData) })
       const data = await res.json()
       if (!res.ok) { setError(data.error || '儲存失敗'); return }
       onSaved()
@@ -262,6 +287,20 @@ function UserFormModal({
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Slack ID</label>
             <input type="text" value={form.slack_id} onChange={(e) => setForm({ ...form, slack_id: e.target.value })} placeholder="用於 Slack 通知（選填）" className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              {user ? '重設密碼' : '密碼'} {!user && <span className="text-red-500">*</span>}
+            </label>
+            <input
+              type="password"
+              value={form.password}
+              onChange={(e) => setForm({ ...form, password: e.target.value })}
+              placeholder={user ? '留空表示不修改密碼' : '請設定密碼（至少 4 個字元）'}
+              required={!user}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+            />
+            {user && <p className="mt-1 text-xs text-gray-400">如需重設密碼才填寫，留空則不修改</p>}
           </div>
           {error && <div className="text-red-600 text-sm bg-red-50 p-3 rounded-lg">{error}</div>}
           <div className="flex justify-end gap-3 pt-2">

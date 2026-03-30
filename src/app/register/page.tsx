@@ -9,6 +9,8 @@ export default function RegisterPage() {
   const [form, setForm] = useState({
     name: '',
     phone: '',
+    password: '',
+    confirmPassword: '',
     email: '',
     slack_id: '',
   })
@@ -19,13 +21,25 @@ export default function RegisterPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
+
+    // 密碼驗證
+    if (form.password.length < 4) {
+      setError('密碼至少需要 4 個字元')
+      return
+    }
+    if (form.password !== form.confirmPassword) {
+      setError('兩次輸入的密碼不一致')
+      return
+    }
+
     setIsSubmitting(true)
 
     try {
+      const { confirmPassword, ...submitData } = form
       const res = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+        body: JSON.stringify(submitData),
       })
       const data = await res.json()
 
@@ -49,7 +63,7 @@ export default function RegisterPage() {
           <div className="text-5xl">✅</div>
           <h2 className="text-2xl font-bold text-gray-900">註冊成功！</h2>
           <p className="text-gray-600">
-            您的帳號已建立，現在可以使用手機號碼登入。
+            您的帳號已建立，現在可以使用手機號碼和密碼登入。
           </p>
           <button
             onClick={() => router.push('/')}
@@ -103,6 +117,34 @@ export default function RegisterPage() {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
+              密碼 <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="password"
+              required
+              value={form.password}
+              onChange={(e) => setForm({ ...form, password: e.target.value })}
+              placeholder="請設定密碼（至少 4 個字元）"
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              確認密碼 <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="password"
+              required
+              value={form.confirmPassword}
+              onChange={(e) => setForm({ ...form, confirmPassword: e.target.value })}
+              placeholder="請再次輸入密碼"
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
               Email
             </label>
             <input
@@ -140,7 +182,7 @@ export default function RegisterPage() {
 
           <button
             type="submit"
-            disabled={isSubmitting || !form.name || !form.phone}
+            disabled={isSubmitting || !form.name || !form.phone || !form.password || !form.confirmPassword}
             className="w-full py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {isSubmitting ? '註冊中...' : '建立帳號'}

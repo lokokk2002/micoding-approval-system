@@ -1,10 +1,15 @@
 import { createServiceClient } from '@/lib/supabase'
+import bcrypt from 'bcryptjs'
 
 export async function POST(request: Request) {
-  const { name, phone, email, slack_id } = await request.json()
+  const { name, phone, password, email, slack_id } = await request.json()
 
   if (!name || !phone) {
     return Response.json({ error: '姓名和手機為必填' }, { status: 400 })
+  }
+
+  if (!password || password.length < 4) {
+    return Response.json({ error: '密碼為必填，至少 4 個字元' }, { status: 400 })
   }
 
   // Basic phone format validation
@@ -26,6 +31,9 @@ export async function POST(request: Request) {
     return Response.json({ error: '此手機號碼已註冊，請直接登入' }, { status: 409 })
   }
 
+  // 密碼加密
+  const password_hash = await bcrypt.hash(password, 10)
+
   // Create user with default role 'user'
   const { data, error } = await supabase
     .from('users')
@@ -36,6 +44,7 @@ export async function POST(request: Request) {
       slack_id: slack_id || null,
       role: 'user',
       is_active: true,
+      password_hash,
     })
     .select()
     .single()
@@ -47,5 +56,9 @@ export async function POST(request: Request) {
     return Response.json({ error: error.message }, { status: 500 })
   }
 
-  return Response.json({ user: data }, { status: 201 })
+  // 不回傳 password_hash
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { password_hash: _hash, ...user } = data
+
+  return Response.json({ user }, { status: 201 })
 }
