@@ -10,6 +10,8 @@ const NAV_ITEMS = [
   { href: '/admin', label: '審批管理', icon: '✅', roles: ['reviewer', 'admin'] },
   { href: '/approvals/tracking', label: '核准後追蹤', icon: '💰', roles: ['reviewer', 'admin'] },
   { href: '/dashboard', label: '儀表板', icon: '📊', roles: ['reviewer', 'admin'] },
+  { href: '/settings/org-structure', label: '組織架構', icon: '🏢', roles: ['admin'] },
+  { href: '/settings/areas', label: '區域管理', icon: '🗺️', roles: ['admin'] },
   { href: '/settings', label: '系統設定', icon: '⚙️', roles: ['admin'] },
 ]
 
@@ -29,7 +31,10 @@ export default function Sidebar() {
       </div>
       <nav className="flex-1 p-4 space-y-1">
         {visibleItems.map((item) => {
-          const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
+          // /settings 只吃完全相符，避免與 /settings/org-structure 重疊高亮
+          const isActive = item.href === '/settings'
+            ? pathname === '/settings'
+            : (pathname === item.href || pathname.startsWith(item.href + '/'))
           return (
             <Link
               key={item.href}
