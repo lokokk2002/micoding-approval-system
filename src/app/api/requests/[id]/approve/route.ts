@@ -1,6 +1,7 @@
 import { createServiceClient } from '@/lib/supabase'
 import { sendStatusEmail } from '@/lib/email'
 import { notifyEmailRaw, notifySlack, extractAmount } from '@/lib/notify'
+import { resolveRouteAt, getApplicantOrg } from '@/lib/reviewer-resolver'
 
 export async function POST(
   request: Request,
@@ -71,6 +72,23 @@ export async function POST(
     const nextRoute = await findRoute(req.current_level + 1)
 
     if (nextRoute) {
+      // 驗證下一級審批人可解析（角色制或舊式皆可）
+      const applicantOrg = await getApplicantOrg(req.applicant_phone)
+      const applicantCtx = {
+        brand: req.brand,
+        location: applicantOrg?.location ?? req.location,
+        department: applicantOrg?.department ?? null,
+        area: applicantOrg?.area ?? null,
+      }
+      const nextResolved = await resolveRouteAt(
+        req.brand, req.location, req.category, req.current_level + 1, applicantCtx,
+      )
+      if (!nextResolved.ok) {
+        return Response.json({
+          error: `已記錄您的核准，但下一層審批人無法解析：${nextResolved.error}。請聯繫管理員後再繼續。`,
+        }, { status: 400 })
+      }
+
       await supabase
         .from('requests')
         .update({ current_level: req.current_level + 1 })

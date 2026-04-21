@@ -88,12 +88,41 @@ export interface History {
   created_at: string
 }
 
+export type OrgRole = 'staff' | 'store_manager' | 'area_manager' | 'dept_head' | 'gm'
+export type ReviewerRole = Exclude<OrgRole, 'staff'>
+
+export interface OrgStructure {
+  id: string
+  user_id: string | null
+  user_name: string
+  user_phone: string | null
+  user_slack_id: string | null
+  org_role: OrgRole
+  brand: string | null
+  department: string | null
+  location: string | null
+  area: string | null
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface Area {
+  id: string
+  brand: string
+  name: string
+  location_codes: string[]
+  created_at: string
+  updated_at: string
+}
+
 export interface Routing {
   id: string
   brand: string
   location: string
   category: string
   level: number
+  reviewer_role: ReviewerRole | null
   reviewer_name: string | null
   reviewer_phone: string | null
   reviewer_slack_id: string | null

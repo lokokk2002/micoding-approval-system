@@ -1,10 +1,12 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { BRANDS, LOCATIONS, HQ_DEPARTMENTS, getLocationLabel, getBrandLabel } from '@/lib/constants'
-import type { User, UserRole, Routing, PostApproval } from '@/types/database'
+import { BRANDS, LOCATIONS, HQ_DEPARTMENTS, getLocationLabel, getBrandLabel, REVIEWER_ROLE_OPTIONS, ORG_ROLE_LABELS } from '@/lib/constants'
+import type { User, UserRole, Routing, PostApproval, ReviewerRole } from '@/types/database'
+import OrgStructureTab from '@/components/settings/OrgStructureTab'
+import AreasTab from '@/components/settings/AreasTab'
 
-type SettingsTab = 'users' | 'routing' | 'post-approval'
+type SettingsTab = 'users' | 'org-structure' | 'areas' | 'routing' | 'post-approval'
 
 // ============================================================
 // Main Settings Page
@@ -14,6 +16,8 @@ export default function SettingsPage() {
 
   const tabs = [
     { key: 'users' as SettingsTab, label: '用戶管理' },
+    { key: 'org-structure' as SettingsTab, label: '組織架構' },
+    { key: 'areas' as SettingsTab, label: '區域' },
     { key: 'routing' as SettingsTab, label: '審批層級' },
     { key: 'post-approval' as SettingsTab, label: '追蹤與結案' },
   ]
@@ -37,6 +41,8 @@ export default function SettingsPage() {
       </div>
 
       {activeTab === 'users' && <UserManagement />}
+      {activeTab === 'org-structure' && <OrgStructureTab />}
+      {activeTab === 'areas' && <AreasTab />}
       {activeTab === 'routing' && <RoutingManagement />}
       {activeTab === 'post-approval' && <PostApprovalManagement />}
     </div>
@@ -478,8 +484,15 @@ function RoutingManagement() {
                           <span className="text-[10px] text-gray-400 mt-0.5">第{route.level}層</span>
                         </div>
                         <div className="bg-gray-50 rounded-lg px-3 py-2 min-w-[120px]">
-                          <p className="text-xs text-gray-400">審批人</p>
-                          <p className="text-sm font-medium text-gray-900">{route.reviewer_name || '未指定'}</p>
+                          <p className="text-xs text-gray-400">
+                            {route.reviewer_role ? '審批角色' : '審批人'}
+                          </p>
+                          <p className="text-sm font-medium text-gray-900">
+                            {route.reviewer_role ? (ORG_ROLE_LABELS[route.reviewer_role] || route.reviewer_role) : (route.reviewer_name || '未指定')}
+                          </p>
+                          {route.reviewer_role && route.reviewer_name && (
+                            <p className="text-[10px] text-gray-400 mt-0.5">覆蓋：{route.reviewer_name}</p>
+                          )}
                         </div>
                         {idx < sortedRoutes.length - 1 && (
                           <svg className="w-5 h-5 text-gray-300 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -510,6 +523,7 @@ function RoutingManagement() {
 
 interface LevelConfig {
   level: number
+  reviewer_role: ReviewerRole | ''
   reviewer_name: string
   reviewer_phone: string
   reviewer_slack_id: string
@@ -536,6 +550,7 @@ function RoutingFormModal({
         const existing = editingGroup.routes.find((r) => r.level === i)
         levels.push({
           level: i,
+          reviewer_role: (existing?.reviewer_role as ReviewerRole) || '',
           reviewer_name: existing?.reviewer_name || '',
           reviewer_phone: existing?.reviewer_phone || '',
           reviewer_slack_id: existing?.reviewer_slack_id || '',
@@ -543,7 +558,7 @@ function RoutingFormModal({
       }
       return levels
     }
-    return [{ level: 1, reviewer_name: '', reviewer_phone: '', reviewer_slack_id: '' }]
+    return [{ level: 1, reviewer_role: '', reviewer_name: '', reviewer_phone: '', reviewer_slack_id: '' }]
   }
 
   const [brand, setBrand] = useState(editingGroup?.brand || '')
@@ -564,10 +579,16 @@ function RoutingFormModal({
       const updated: LevelConfig[] = []
       for (let i = 1; i <= newTotal; i++) {
         const existing = prev.find((l) => l.level === i)
-        updated.push(existing || { level: i, reviewer_name: '', reviewer_phone: '', reviewer_slack_id: '' })
+        updated.push(existing || { level: i, reviewer_role: '', reviewer_name: '', reviewer_phone: '', reviewer_slack_id: '' })
       }
       return updated
     })
+  }
+
+  const handleLevelRoleChange = (levelNum: number, role: ReviewerRole | '') => {
+    setLevels((prev) =>
+      prev.map((l) => l.level === levelNum ? { ...l, reviewer_role: role } : l)
+    )
   }
 
   const handleLevelUserChange = (levelNum: number, name: string, phone: string, slackId: string) => {
@@ -585,10 +606,10 @@ function RoutingFormModal({
     setIsSaving(true)
     setError('')
 
-    // 驗證每層都有審批人
-    const missingLevels = levels.filter((l) => !l.reviewer_name)
+    // 驗證：每層都要有角色或指定人員
+    const missingLevels = levels.filter((l) => !l.reviewer_role && !l.reviewer_name)
     if (missingLevels.length > 0) {
-      setError(`第 ${missingLevels.map((l) => l.level).join('、')} 層尚未指定審批人`)
+      setError(`第 ${missingLevels.map((l) => l.level).join('、')} 層尚未指定審批角色或審批人`)
       setIsSaving(false)
       return
     }
@@ -717,14 +738,43 @@ function RoutingFormModal({
                         </span>
                         <span className="text-sm font-medium text-gray-700">第 {levelConfig.level} 層審批</span>
                       </div>
-                      <div className="px-3 py-2 bg-white">
-                        <UserSelector
-                          label=""
-                          selectedName={levelConfig.reviewer_name}
-                          users={users}
-                          colorClass=""
-                          onChange={(name, phone, slackId) => handleLevelUserChange(levelConfig.level, name, phone, slackId)}
-                        />
+                      <div className="px-3 py-2 bg-white space-y-2">
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">審批角色</label>
+                          <select
+                            value={levelConfig.reviewer_role}
+                            onChange={(e) => handleLevelRoleChange(levelConfig.level, e.target.value as ReviewerRole | '')}
+                            className="w-full px-2 py-1.5 border border-gray-300 rounded-lg text-sm"
+                          >
+                            <option value="">請選擇角色</option>
+                            {REVIEWER_ROLE_OPTIONS.map((r) => (
+                              <option key={r.value} value={r.value}>{r.label}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <details className="group">
+                          <summary className="text-xs text-gray-500 cursor-pointer hover:text-gray-700 select-none">
+                            進階：指定特定人員（覆蓋角色制）
+                          </summary>
+                          <div className="mt-2">
+                            <UserSelector
+                              label=""
+                              selectedName={levelConfig.reviewer_name}
+                              users={users}
+                              colorClass=""
+                              onChange={(name, phone, slackId) => handleLevelUserChange(levelConfig.level, name, phone, slackId)}
+                            />
+                            {levelConfig.reviewer_name && (
+                              <button
+                                type="button"
+                                onClick={() => handleLevelUserChange(levelConfig.level, '', '', '')}
+                                className="mt-1 text-xs text-gray-400 hover:text-gray-600"
+                              >
+                                清除指定人員
+                              </button>
+                            )}
+                          </div>
+                        </details>
                       </div>
                     </div>
                   </div>
@@ -735,12 +785,20 @@ function RoutingFormModal({
             <div className="mt-3 pt-3 border-t border-gray-200">
               <p className="text-xs text-gray-400">
                 流程：申請人提交
-                {levels.map((l, i) => (
-                  <span key={l.level}>
-                    {' '}→ {l.reviewer_name ? <strong className="text-gray-600">{l.reviewer_name}</strong> : <span className="text-red-400">待指定</span>}
-                    <span className="text-gray-300">（第{l.level}層）</span>
-                  </span>
-                ))}
+                {levels.map((l) => {
+                  const roleLabel = l.reviewer_role ? ORG_ROLE_LABELS[l.reviewer_role] : null
+                  const display = l.reviewer_name
+                    ? <strong className="text-gray-600">{l.reviewer_name}</strong>
+                    : roleLabel
+                      ? <span className="text-blue-600 font-medium">{roleLabel}</span>
+                      : <span className="text-red-400">待指定</span>
+                  return (
+                    <span key={l.level}>
+                      {' '}→ {display}
+                      <span className="text-gray-300">（第{l.level}層）</span>
+                    </span>
+                  )
+                })}
                 {' '}→ 核准
               </p>
             </div>

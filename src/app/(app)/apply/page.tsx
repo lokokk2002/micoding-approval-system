@@ -1,9 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { BRANDS, LOCATIONS, HQ_DEPARTMENTS, REQUEST_CATEGORIES, REQUEST_TYPES, ROLE_AVAILABLE_CATEGORIES } from '@/lib/constants'
-import type { Brand, RequestCategory, RequestType } from '@/types/database'
+import type { Brand, RequestCategory, RequestType, OrgStructure } from '@/types/database'
 
 interface SupplyItem {
   name: string
@@ -22,18 +22,52 @@ export default function ApplyPage() {
   const [attachments, setAttachments] = useState<File[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitResult, setSubmitResult] = useState<{ success: boolean; message: string } | null>(null)
+  const [orgRecord, setOrgRecord] = useState<OrgStructure | null>(null)
+  const [orgLoading, setOrgLoading] = useState(true)
 
-  // 判斷身份類型
+  // 載入申請人組織歸屬 → 自動帶入 brand / location
+  useEffect(() => {
+    if (!user) return
+    let cancel = false
+    ;(async () => {
+      try {
+        const res = await fetch(`/api/org-structure/me?phone=${encodeURIComponent(user.phone)}`)
+        const data = await res.json()
+        if (cancel) return
+        const org: OrgStructure | null = data.item || null
+        setOrgRecord(org)
+        if (org) {
+          if (org.brand) setBrand(org.brand as Brand)
+          if (org.location) setLocation(org.location)
+          else if (org.department) setLocation(org.department)
+        }
+      } finally {
+        if (!cancel) setOrgLoading(false)
+      }
+    })()
+    return () => { cancel = true }
+  }, [user])
+
+  // 判斷身份類型（優先用 org record）
   const getIdentityType = (): string => {
+    if (orgRecord) {
+      if (orgRecord.department) {
+        const d = orgRecord.department
+        if (d === 'hr') return 'hr'
+        if (d === 'marketing' || d === 'content') return 'marketing'
+        if (d === 'finance' || d === 'operations' || d === 'cs') return 'finance'
+      }
+      if (orgRecord.location) return 'store'
+    }
     if (!location) return 'store'
     if (location === 'hr') return 'hr'
     if (location === 'marketing' || location === 'content') return 'marketing'
     if (location === 'finance' || location === 'operations' || location === 'cs') return 'finance'
-    // 門市人員
     return 'store'
   }
 
   const identityType = getIdentityType()
+  const isOrgLocked = !!orgRecord // 組織歸屬已登記 → 品牌/單位鎖定
   const availableCategories = ROLE_AVAILABLE_CATEGORIES[identityType] || []
 
   const locationOptions = brand
@@ -1042,17 +1076,29 @@ export default function ApplyPage() {
           </div>
         </div>
 
-        {/* 品牌選擇 */}
+        {/* 組織歸屬檢查 */}
+        {!orgLoading && !orgRecord && (
+          <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
+            <p className="text-sm text-amber-900 font-medium">尚未設定您的組織歸屬</p>
+            <p className="text-xs text-amber-800 mt-1">請聯繫管理員在「系統設定 → 組織架構」為您新增記錄（角色 / 品牌 / 單位），設定完成後才能送出申請。</p>
+          </div>
+        )}
+
+        {/* 品牌選擇（有 org record 時自動帶入並鎖定） */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">所屬品牌 *</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            所屬品牌 *
+            {isOrgLocked && <span className="ml-2 text-xs text-gray-400">（已由組織歸屬帶入）</span>}
+          </label>
           <div className="flex gap-4">
             {BRANDS.map((b) => (
-              <label key={b.value} className="flex items-center gap-2 cursor-pointer">
+              <label key={b.value} className={`flex items-center gap-2 ${isOrgLocked ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
                 <input
                   type="radio"
                   name="brand"
                   value={b.value}
                   checked={brand === b.value}
+                  disabled={isOrgLocked}
                   onChange={(e) => {
                     setBrand(e.target.value as Brand)
                     setLocation('')
@@ -1070,16 +1116,20 @@ export default function ApplyPage() {
         {/* 所屬單位 */}
         {brand && (
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">所屬單位 *</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              所屬單位 *
+              {isOrgLocked && <span className="ml-2 text-xs text-gray-400">（已由組織歸屬帶入）</span>}
+            </label>
             <select
               value={location}
+              disabled={isOrgLocked}
               onChange={(e) => {
                 setLocation(e.target.value)
                 setCategory('')
                 setType('')
               }}
               required
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
             >
               <option value="">請選擇</option>
               <optgroup label="門市">

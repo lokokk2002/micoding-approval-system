@@ -37,7 +37,6 @@ export async function POST(request: Request) {
 
     const cat = category || 'all'
 
-    // 先刪除該 brand+location+category 的所有舊路由
     const { error: deleteError } = await supabase
       .from('routing')
       .delete()
@@ -49,17 +48,26 @@ export async function POST(request: Request) {
       return Response.json({ error: deleteError.message }, { status: 500 })
     }
 
-    // 過濾掉沒有審批人的層級，然後批次新增
+    // 至少要有 reviewer_role 或 reviewer_name 其中之一
     const rowsToInsert = levels
-      .filter((l: { reviewer_name?: string }) => l.reviewer_name)
-      .map((l: { level: number; reviewer_name: string; reviewer_phone: string; reviewer_slack_id: string }) => ({
+      .filter((l: { reviewer_role?: string; reviewer_name?: string }) =>
+        (l.reviewer_role && l.reviewer_role.trim()) || (l.reviewer_name && l.reviewer_name.trim())
+      )
+      .map((l: {
+        level: number
+        reviewer_role?: string
+        reviewer_name?: string
+        reviewer_phone?: string
+        reviewer_slack_id?: string
+      }) => ({
         brand,
         location,
         category: cat,
         level: l.level,
-        reviewer_name: l.reviewer_name,
-        reviewer_phone: l.reviewer_phone,
-        reviewer_slack_id: l.reviewer_slack_id,
+        reviewer_role: l.reviewer_role || null,
+        reviewer_name: l.reviewer_name || null,
+        reviewer_phone: l.reviewer_phone || null,
+        reviewer_slack_id: l.reviewer_slack_id || null,
       }))
 
     if (rowsToInsert.length === 0) {
@@ -81,11 +89,14 @@ export async function POST(request: Request) {
   // 單筆模式（向後相容）
   const {
     brand, location, category, level,
-    reviewer_name, reviewer_phone, reviewer_slack_id,
+    reviewer_role, reviewer_name, reviewer_phone, reviewer_slack_id,
   } = body
 
   if (!brand || !location || level === undefined) {
     return Response.json({ error: '品牌、門市、層級為必填' }, { status: 400 })
+  }
+  if (!reviewer_role && !reviewer_name) {
+    return Response.json({ error: '須指定審批角色或審批人' }, { status: 400 })
   }
 
   const { data, error } = await supabase
@@ -95,9 +106,10 @@ export async function POST(request: Request) {
       location,
       category: category || 'all',
       level,
-      reviewer_name,
-      reviewer_phone,
-      reviewer_slack_id,
+      reviewer_role: reviewer_role || null,
+      reviewer_name: reviewer_name || null,
+      reviewer_phone: reviewer_phone || null,
+      reviewer_slack_id: reviewer_slack_id || null,
     })
     .select()
     .single()

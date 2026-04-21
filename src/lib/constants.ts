@@ -136,6 +136,23 @@ export const TYPE_CODES: Record<string, string> = {
   content_approval: 'CT',
 }
 
+// 組織角色（org_structure.org_role + routing.reviewer_role）
+export const ORG_ROLE_LABELS: Record<string, string> = {
+  staff: '員工/專員',
+  store_manager: '門店主管',
+  area_manager: '區主管',
+  dept_head: '部門主管',
+  gm: '總經理',
+}
+
+// routing 可選的審批角色（staff 不能當審批人）
+export const REVIEWER_ROLE_OPTIONS = [
+  { value: 'store_manager', label: '門店主管' },
+  { value: 'area_manager', label: '區主管' },
+  { value: 'dept_head', label: '部門主管' },
+  { value: 'gm', label: '總經理' },
+] as const
+
 // 表單欄位中文對照 + 類型
 export const FIELD_LABELS: Record<string, string> = {
   expense_category: '費用類別', amount: '金額', expense_date: '發生日期', vendor: '廠商',
