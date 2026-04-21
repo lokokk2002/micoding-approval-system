@@ -8,6 +8,7 @@ const NAV_ITEMS = [
   { href: '/apply', label: '發起申請', icon: '📝', roles: ['user', 'reviewer', 'admin'] },
   { href: '/my-requests', label: '我的申請', icon: '📋', roles: ['user', 'reviewer', 'admin'] },
   { href: '/admin', label: '審批管理', icon: '✅', roles: ['reviewer', 'admin'] },
+  { href: '/approvals/tracking', label: '核准後追蹤', icon: '💰', roles: ['reviewer', 'admin'] },
   { href: '/dashboard', label: '儀表板', icon: '📊', roles: ['reviewer', 'admin'] },
   { href: '/settings', label: '系統設定', icon: '⚙️', roles: ['admin'] },
 ]

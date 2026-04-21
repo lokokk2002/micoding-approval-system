@@ -9,10 +9,10 @@ export async function POST(
 
   const supabase = createServiceClient()
 
-  // Update status
+  // 不再寫 deleted_at（那是「管理員刪除」專用）— withdrawn 保留在列表中才能讓申請人修改重送
   await supabase
     .from('requests')
-    .update({ status: 'withdrawn', deleted_at: new Date().toISOString() })
+    .update({ status: 'withdrawn' })
     .eq('id', id)
     .eq('status', 'pending')
 

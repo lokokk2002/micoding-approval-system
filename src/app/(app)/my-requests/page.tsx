@@ -1,9 +1,11 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import Link from 'next/link'
 import { useAuth } from '@/contexts/AuthContext'
 import { STATUS_LABELS, STATUS_COLORS, getLocationLabel, getBrandLabel } from '@/lib/constants'
 import type { Request } from '@/types/database'
+import ConfirmWithCountdown from '@/components/ConfirmWithCountdown'
 
 type ViewTab = 'active' | 'closed'
 
@@ -197,18 +199,35 @@ function getFormDataSummary(type: string, formData: Record<string, unknown>): st
 }
 
 // Statuses considered "active" (not yet finished)
-const ACTIVE_STATUSES = new Set(['pending', 'approved', 'executing', 'in_progress', 'completed'])
-const CLOSED_STATUSES = new Set(['closed', 'rejected', 'withdrawn'])
+const ACTIVE_STATUSES = new Set([
+  'pending', 'approved', 'executing', 'in_progress', 'completed',
+  'returned', 'tracking', 'pending_revoke',
+])
+const CLOSED_STATUSES = new Set(['closed', 'rejected', 'withdrawn', 'revoked'])
 
 export default function MyRequestsPage() {
   const { user } = useAuth()
   const [requests, setRequests] = useState<Request[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [viewTab, setViewTab] = useState<ViewTab>('active')
+  const [openMenu, setOpenMenu] = useState<string | null>(null)
+  const [withdrawTarget, setWithdrawTarget] = useState<string | null>(null)
+  const menuRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     if (user) fetchMyRequests()
   }, [user])
+
+  // click-outside for menu
+  useEffect(() => {
+    const onDocClick = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setOpenMenu(null)
+      }
+    }
+    if (openMenu) document.addEventListener('mousedown', onDocClick)
+    return () => document.removeEventListener('mousedown', onDocClick)
+  }, [openMenu])
 
   const fetchMyRequests = async () => {
     try {
@@ -230,11 +249,14 @@ export default function MyRequestsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ actor_name: user.name }),
       })
+      setWithdrawTarget(null)
       fetchMyRequests()
     } catch {
       console.error('Failed to withdraw')
     }
   }
+
+  const withdrawTargetReq = withdrawTarget ? requests.find((r) => r.id === withdrawTarget) : null
 
   const filteredRequests = requests.filter((r) => {
     if (viewTab === 'active') return ACTIVE_STATUSES.has(r.status)
@@ -341,14 +363,20 @@ export default function MyRequestsPage() {
                       <span className={`px-3 py-1 rounded-full text-sm font-bold ${STATUS_COLORS[req.status] || ''}`}>
                         {STATUS_LABELS[req.status] || req.status}
                       </span>
-                      <div className="flex gap-2">
-                        {req.status === 'pending' && (
-                          <button
-                            onClick={() => handleWithdraw(req.id)}
-                            className="text-sm text-orange-600 hover:text-orange-800 font-medium px-2 py-1 rounded hover:bg-orange-50 transition-colors"
+                      <div className="flex gap-2 items-center">
+                        <Link
+                          href={`/requests/${req.id}`}
+                          className="text-sm text-blue-600 hover:text-blue-800 font-medium px-2 py-1 rounded hover:bg-blue-50 transition-colors"
+                        >
+                          查看詳情
+                        </Link>
+                        {(req.status === 'returned' || req.status === 'withdrawn') && (
+                          <Link
+                            href={`/requests/${req.id}`}
+                            className="text-sm text-amber-700 bg-amber-50 border border-amber-200 hover:bg-amber-100 font-medium px-2.5 py-1 rounded transition-colors"
                           >
-                            撤回
-                          </button>
+                            修改重送
+                          </Link>
                         )}
                         {req.pdf_url && (
                           <a
@@ -359,6 +387,39 @@ export default function MyRequestsPage() {
                           >
                             下載 PDF
                           </a>
+                        )}
+                        {/* 更多操作 dropdown：撤回 / 申請撤銷 等高風險動作 */}
+                        {(req.status === 'pending' || req.status === 'approved') && (
+                          <div className="relative" ref={openMenu === req.id ? menuRef : undefined}>
+                            <button
+                              onClick={() => setOpenMenu(openMenu === req.id ? null : req.id)}
+                              className="text-sm text-gray-500 hover:text-gray-700 font-medium px-2 py-1 rounded hover:bg-gray-100 transition-colors"
+                              aria-label="更多操作"
+                            >
+                              ⋯ 更多
+                            </button>
+                            {openMenu === req.id && (
+                              <div className="absolute right-0 top-full mt-1 w-44 bg-white border border-gray-200 rounded-lg shadow-lg z-10 py-1">
+                                {req.status === 'pending' && (
+                                  <button
+                                    onClick={() => { setOpenMenu(null); setWithdrawTarget(req.id) }}
+                                    className="w-full text-left px-3 py-2 text-sm text-orange-700 hover:bg-orange-50"
+                                  >
+                                    撤回此申請
+                                  </button>
+                                )}
+                                {req.status === 'approved' && (
+                                  <Link
+                                    href={`/requests/${req.id}`}
+                                    onClick={() => setOpenMenu(null)}
+                                    className="block w-full text-left px-3 py-2 text-sm text-rose-700 hover:bg-rose-50"
+                                  >
+                                    申請撤銷…
+                                  </Link>
+                                )}
+                              </div>
+                            )}
+                          </div>
                         )}
                       </div>
                     </div>
@@ -409,6 +470,19 @@ export default function MyRequestsPage() {
             )
           })}
         </div>
+      )}
+
+      {/* 撤回確認 dialog（3 秒倒數防呆） */}
+      {withdrawTarget && withdrawTargetReq && (
+        <ConfirmWithCountdown
+          title="確認撤回"
+          description={`你即將撤回這張單（${withdrawTargetReq.request_number}），已完成的審批將需要重新開始。\n撤回後可在列表中選「修改重送」送回審批流程。`}
+          confirmLabel="確認撤回"
+          seconds={3}
+          confirmClassName="bg-orange-600 hover:bg-orange-700"
+          onCancel={() => setWithdrawTarget(null)}
+          onConfirm={() => handleWithdraw(withdrawTarget)}
+        />
       )}
     </div>
   )

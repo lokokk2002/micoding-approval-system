@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
+import Link from 'next/link'
 import { STATUS_LABELS, STATUS_COLORS, getLocationLabel, getBrandLabel } from '@/lib/constants'
 import type { Request } from '@/types/database'
 
@@ -110,6 +111,8 @@ export default function AdminPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [inlineComments, setInlineComments] = useState<Record<string, string>>({})
   const [confirmReject, setConfirmReject] = useState<string | null>(null)
+  const [returnTarget, setReturnTarget] = useState<string | null>(null)
+  const [returnComment, setReturnComment] = useState('')
   const [processingIds, setProcessingIds] = useState<Set<string>>(new Set())
 
   const fetchRequests = useCallback(async () => {
@@ -121,7 +124,7 @@ export default function AdminPage() {
 
       switch (activeTab) {
         case 'pending':
-          statusFilter = 'pending'
+          statusFilter = 'pending,pending_revoke'
           reviewerParam = `&reviewer=${encodeURIComponent(user.name)}&role=${user.role}`
           break
         case 'tracking':
@@ -212,6 +215,35 @@ export default function AdminPage() {
       console.error('Batch action failed')
     } finally {
       setProcessingIds(new Set())
+    }
+  }
+
+  const handleReturn = async (requestId: string) => {
+    if (!user) return
+    const reason = returnComment.trim()
+    if (!reason) {
+      alert('退回原因為必填')
+      return
+    }
+    setProcessingIds((prev) => new Set(prev).add(requestId))
+    try {
+      const res = await fetch(`/api/requests/${requestId}/return`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ comment: reason, actor_name: user.name, actor_role: user.role }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        alert(data.error || '退回失敗')
+        return
+      }
+      setReturnTarget(null)
+      setReturnComment('')
+      fetchRequests()
+    } catch {
+      console.error('Failed to return')
+    } finally {
+      setProcessingIds((prev) => { const s = new Set(prev); s.delete(requestId); return s })
     }
   }
 
@@ -370,8 +402,8 @@ export default function AdminPage() {
                 <div className="p-4">
                   {/* Main row */}
                   <div className="flex items-start gap-3">
-                    {/* Checkbox for batch */}
-                    {showBatchBar && activeTab === 'pending' && (
+                    {/* Checkbox for batch（撤銷審核單不參與批次） */}
+                    {showBatchBar && activeTab === 'pending' && req.status === 'pending' && (
                       <input
                         type="checkbox"
                         checked={selectedIds.has(req.id)}
@@ -456,6 +488,15 @@ export default function AdminPage() {
                     {/* Action buttons (right side) */}
                     {!showBatchBar && (
                       <div className="flex flex-col gap-2 shrink-0">
+                        {/* Pending tab: revoke-approval action */}
+                        {activeTab === 'pending' && req.status === 'pending_revoke' && (
+                          <Link
+                            href={`/requests/${req.id}`}
+                            className="px-4 py-2 bg-rose-600 text-white rounded-lg text-sm font-medium hover:bg-rose-700 transition-colors whitespace-nowrap text-center"
+                          >
+                            審核撤銷
+                          </Link>
+                        )}
                         {/* Pending tab: approve/reject */}
                         {activeTab === 'pending' && req.status === 'pending' && (
                           <>
@@ -488,6 +529,12 @@ export default function AdminPage() {
                                 駁回
                               </button>
                             )}
+                            <button
+                              onClick={() => { setReturnTarget(req.id); setReturnComment('') }}
+                              className="px-4 py-2 bg-white text-amber-700 border border-amber-300 rounded-lg text-sm font-medium hover:bg-amber-50 transition-colors whitespace-nowrap"
+                            >
+                              退回修改
+                            </button>
                           </>
                         )}
 
@@ -570,6 +617,42 @@ export default function AdminPage() {
               </div>
             )
           })}
+        </div>
+      )}
+
+      {/* Return modal */}
+      {returnTarget && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={() => { setReturnTarget(null); setReturnComment('') }}>
+          <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-md mx-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-gray-900 mb-1">退回修改</h3>
+            <p className="text-sm text-gray-500 mb-4">申請人會收到通知並可在「我的申請」修改後重送。</p>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              退回原因 <span className="text-red-500">*</span>
+            </label>
+            <textarea
+              value={returnComment}
+              onChange={(e) => setReturnComment(e.target.value)}
+              rows={4}
+              placeholder="請說明要修改的內容，例：金額需補發票、事由描述不足…"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500 resize-none"
+              autoFocus
+            />
+            <div className="flex justify-end gap-2 mt-4">
+              <button
+                onClick={() => { setReturnTarget(null); setReturnComment('') }}
+                className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 rounded-lg"
+              >
+                取消
+              </button>
+              <button
+                onClick={() => handleReturn(returnTarget)}
+                disabled={!returnComment.trim()}
+                className="px-4 py-2 bg-amber-600 text-white rounded-lg text-sm font-medium hover:bg-amber-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                確認退回
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

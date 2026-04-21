@@ -1,6 +1,24 @@
 export type UserRole = 'user' | 'reviewer' | 'admin'
-export type RequestStatus = 'pending' | 'approved' | 'rejected' | 'executing' | 'in_progress' | 'completed' | 'closed' | 'withdrawn' | 'deleted'
-export type HistoryAction = 'approved' | 'rejected' | 'withdrawn' | 'admin_deleted' | 'executing' | 'in_progress' | 'completed' | 'closed'
+export type RequestStatus =
+  | 'draft' | 'pending' | 'approved' | 'rejected'
+  | 'executing' | 'in_progress' | 'completed' | 'closed'
+  | 'withdrawn' | 'deleted'
+  | 'returned' | 'tracking' | 'pending_revoke' | 'revoked'
+export type TrackingStatus = 'pending_payment' | 'paid' | 'pending_verification' | 'closed'
+export type HistoryAction =
+  | 'approved' | 'rejected' | 'withdrawn' | 'admin_deleted'
+  | 'executing' | 'in_progress' | 'completed' | 'closed'
+  | 'returned' | 'resubmitted'
+  | 'revoke_requested' | 'revoked' | 'revoke_rejected'
+  | 'tracking_started' | 'payment_marked'
+
+export interface FormDataVersion {
+  version: number
+  form_data: Record<string, unknown>
+  attachments: Array<{ url: string; filename: string; type: string }>
+  saved_at: string
+  reason: string
+}
 export type Brand = 'double_fitness' | 'rechill'
 export type RequestCategory = 'finance' | 'procurement' | 'hr' | 'operations' | 'marketing'
 export type RequestType =
@@ -48,6 +66,15 @@ export interface Request {
   pdf_url: string | null
   created_at: string
   updated_at: string
+  version: number
+  form_data_versions: FormDataVersion[]
+  tracking_status: TrackingStatus | null
+  tracker_name: string | null
+  tracker_slack_id: string | null
+  payment_due_date: string | null
+  payment_date: string | null
+  payment_note: string | null
+  amount: number | null
 }
 
 export interface History {

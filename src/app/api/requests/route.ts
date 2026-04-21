@@ -1,6 +1,7 @@
 import { createServiceClient } from '@/lib/supabase'
 import { TYPE_CODES } from '@/lib/constants'
 import { sendStatusEmail } from '@/lib/email'
+import { extractAmount } from '@/lib/notify'
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
@@ -43,6 +44,16 @@ export async function GET(request: Request) {
 
     if (routes && routes.length > 0) {
       const filtered = (data || []).filter((req) => {
+        // pending_revoke 是申請人提出撤銷審核，交由原核准人決定 —
+        // 以 current_level（= 最後核准時的層級）做 routing 比對
+        if (req.status === 'pending_revoke') {
+          return routes.some((route) => {
+            return route.brand === req.brand &&
+              route.location === req.location &&
+              (route.category === 'all' || route.category === req.category) &&
+              route.level === req.current_level
+          })
+        }
         return routes.some((route) => {
           const brandMatch = route.brand === req.brand
           const locationMatch = route.location === req.location
@@ -122,6 +133,8 @@ export async function POST(request: Request) {
   const request_number = `${typeCode}-${year}-${mmdd}-${seq}`
 
   const supabase = createServiceClient()
+  const amount = extractAmount(form_data as Record<string, unknown>)
+
   const { data, error } = await supabase
     .from('requests')
     .insert({
@@ -138,6 +151,7 @@ export async function POST(request: Request) {
       is_urgent: is_urgent || false,
       current_level: 1,
       status: 'pending',
+      amount,
     })
     .select()
     .single()

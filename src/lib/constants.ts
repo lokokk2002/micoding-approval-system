@@ -136,7 +136,92 @@ export const TYPE_CODES: Record<string, string> = {
   content_approval: 'CT',
 }
 
+// 表單欄位中文對照 + 類型
+export const FIELD_LABELS: Record<string, string> = {
+  expense_category: '費用類別', amount: '金額', expense_date: '發生日期', vendor: '廠商',
+  reason: '申請事由', purpose: '用途說明', expected_date: '預計使用日期',
+  original_item: '原預算項目', over_amount: '超支金額', over_reason: '超支原因',
+  item_name: '品項名稱', quantity: '數量', unit_price: '預估單價', total_price: '預估總額',
+  needed_by: '需求日期', equipment_name: '設備名稱', spec_model: '規格型號',
+  estimated_amount: '預估金額', vendor_suggestion: '廠商建議',
+  position: '職位名稱', headcount: '需求人數', job_description: '工作內容摘要',
+  expected_onboard: '期望到職日', employee_name: '被提報人',
+  current_position: '現職', current_salary: '現薪', proposed_position: '建議新職',
+  proposed_salary: '建議新薪', recommendation: '推薦理由',
+  last_work_date: '預計最後工作日', handover_note: '交接事項',
+  fault_description: '故障描述', urgency: '急迫程度', items: '品項清單',
+  customer_name: '客戶姓名/會員編號', complaint_content: '客訴內容',
+  proposed_solution: '建議處理方式', compensation_amount: '涉及金額',
+  event_name: '活動名稱', date_range: '起迄日期', event_description: '活動內容',
+  estimated_cost: '預估費用', platform: '投放平台', ad_period: '投放期間',
+  budget_amount: '預算金額', objective: '投放目標',
+  partner_name: '合作對象', collaboration_content: '合作內容', fee: '費用',
+  contract_period: '合約期間', content_type: '內容類型', publish_platform: '發布平台',
+  publish_date: '預計發布日', content_summary: '內容摘要',
+}
+
+export const MONEY_FIELD_KEYS = new Set([
+  'amount', 'over_amount', 'unit_price', 'total_price', 'estimated_amount',
+  'current_salary', 'proposed_salary', 'compensation_amount', 'estimated_cost',
+  'budget_amount', 'fee',
+])
+
+export const TYPE_LABELS: Record<string, string> = {
+  expense_report: '費用報銷',
+  cash_advance: '現金墊款',
+  over_budget: '預算外支出',
+  purchase_general: '一般採購',
+  purchase_equipment: '設備採購',
+  recruitment: '招募需求',
+  promotion: '升職/調薪',
+  resignation: '離職申請',
+  equipment_repair: '設備維修',
+  supply_restock: '耗材補貨',
+  complaint_auth: '客訴處理授權',
+  event_proposal: '活動/促銷方案',
+  ad_budget: '廣告預算',
+  kol_collaboration: 'KOL/外部合作',
+  content_approval: '素材上架授權',
+}
+
+export const HISTORY_ACTION_LABELS: Record<string, string> = {
+  approved: '核准',
+  rejected: '駁回',
+  withdrawn: '撤回',
+  admin_deleted: '管理員刪除',
+  executing: '開始執行',
+  in_progress: '進行中',
+  completed: '完成',
+  closed: '結案',
+  returned: '退回修改',
+  resubmitted: '修改重送',
+  revoke_requested: '申請撤銷',
+  revoked: '撤銷生效',
+  revoke_rejected: '撤銷請求被拒',
+  tracking_started: '進入追蹤',
+  payment_marked: '撥款標記',
+}
+
+export const HISTORY_ACTION_COLORS: Record<string, string> = {
+  approved: 'bg-green-100 text-green-700',
+  rejected: 'bg-red-100 text-red-700',
+  withdrawn: 'bg-orange-100 text-orange-700',
+  returned: 'bg-amber-100 text-amber-700',
+  resubmitted: 'bg-blue-100 text-blue-700',
+  revoke_requested: 'bg-rose-100 text-rose-700',
+  revoked: 'bg-red-100 text-red-700',
+  revoke_rejected: 'bg-gray-100 text-gray-700',
+  tracking_started: 'bg-cyan-100 text-cyan-700',
+  payment_marked: 'bg-blue-100 text-blue-700',
+  closed: 'bg-emerald-100 text-emerald-700',
+  executing: 'bg-blue-100 text-blue-700',
+  in_progress: 'bg-indigo-100 text-indigo-700',
+  completed: 'bg-gray-100 text-gray-700',
+  admin_deleted: 'bg-red-100 text-red-700',
+}
+
 export const STATUS_LABELS: Record<string, string> = {
+  draft: '草稿',
   pending: '待審核',
   approved: '已核准',
   rejected: '已駁回',
@@ -146,9 +231,14 @@ export const STATUS_LABELS: Record<string, string> = {
   closed: '已結案',
   withdrawn: '已撤回',
   deleted: '已刪除',
+  returned: '退回修改',
+  tracking: '追蹤中',
+  pending_revoke: '撤銷審核中',
+  revoked: '已撤銷',
 }
 
 export const STATUS_COLORS: Record<string, string> = {
+  draft: 'bg-gray-100 text-gray-600',
   pending: 'bg-yellow-100 text-yellow-800',
   approved: 'bg-green-100 text-green-800',
   rejected: 'bg-red-100 text-red-800',
@@ -158,4 +248,22 @@ export const STATUS_COLORS: Record<string, string> = {
   closed: 'bg-emerald-100 text-emerald-800',
   withdrawn: 'bg-orange-100 text-orange-800',
   deleted: 'bg-red-100 text-red-800',
+  returned: 'bg-amber-100 text-amber-800',
+  tracking: 'bg-cyan-100 text-cyan-800',
+  pending_revoke: 'bg-rose-100 text-rose-800',
+  revoked: 'bg-red-100 text-red-800',
+}
+
+export const TRACKING_STATUS_LABELS: Record<string, string> = {
+  pending_payment: '待撥款',
+  paid: '已撥款',
+  pending_verification: '待核銷',
+  closed: '已結案',
+}
+
+export const TRACKING_STATUS_COLORS: Record<string, string> = {
+  pending_payment: 'bg-yellow-100 text-yellow-800',
+  paid: 'bg-blue-100 text-blue-800',
+  pending_verification: 'bg-purple-100 text-purple-800',
+  closed: 'bg-emerald-100 text-emerald-800',
 }
